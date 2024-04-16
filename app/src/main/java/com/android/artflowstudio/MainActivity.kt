@@ -1,16 +1,26 @@
 package com.android.artflowstudio
 
+import android.Manifest.permission.READ_EXTERNAL_STORAGE
+import android.Manifest.permission.READ_MEDIA_IMAGES
+import android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+import android.annotation.SuppressLint
 import android.app.Dialog
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -22,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     private var imageButtonCurrentPaint: ImageButton? = null
     private var currentIndex: Int? = null
 
+    @SuppressLint("NewApi")
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,6 +42,15 @@ class MainActivity : AppCompatActivity() {
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
+        }
+
+        val requestPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            val grantedPermissions = permissions.filterValues { it }
+
+            when {
+                grantedPermissions.isEmpty() -> Log.i("Permissions", "Permission Denied.")
+                else -> if (grantedPermissions.keys.intersect(setOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED, READ_EXTERNAL_STORAGE)).isNotEmpty()) Log.i("Permission", "Permission Granted")
+            }
         }
 
         drawingView = findViewById(R.id.drawing_view)
@@ -44,6 +64,7 @@ class MainActivity : AppCompatActivity() {
 
         val ibBrush: ImageButton = findViewById(R.id.ib_brush)
         val ibEraser: ImageButton = findViewById(R.id.ib_eraser)
+        val ibGallery: ImageButton = findViewById(R.id.ib_add_image)
 
         ibBrush.setOnClickListener {
             showBrushSizeChooserDialog()
@@ -66,6 +87,15 @@ class MainActivity : AppCompatActivity() {
                 val button = linearLayoutPaintColors.getChildAt(index) as? ImageButton
                 button?.setImageDrawable(ContextCompat.getDrawable(this, R.drawable.color_palette_unselected))
             }
+        }
+
+        ibGallery.setOnClickListener {
+            when {
+                checkPermissionsGranted() -> Toast.makeText(this, "Already permissions granted", Toast.LENGTH_SHORT).show()
+                !checkPermissionsGranted() -> showRationaleDialog("Art Flow Studio", "Art Flow Studio needs to Access your External Storage")
+                else -> requestPermission(requestPermissions = requestPermissions)
+            }
+
         }
     }
 
@@ -102,5 +132,36 @@ class MainActivity : AppCompatActivity() {
             imageButtonCurrentPaint?.setImageDrawable(ContextCompat.getDrawable(this, R.drawable.color_palette_unselected))
             imageButtonCurrentPaint = view
         }
+    }
+
+    private fun requestPermission(requestPermissions: ActivityResultLauncher<Array<String>>) {
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> requestPermissions.launch(arrayOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED))
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> requestPermissions.launch(arrayOf(READ_MEDIA_IMAGES))
+            else -> requestPermissions.launch(arrayOf(READ_EXTERNAL_STORAGE))
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    private fun checkPermissionsGranted(): Boolean {
+        val permissions = arrayOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED, READ_EXTERNAL_STORAGE)
+
+        return permissions.any { check ->
+            ContextCompat.checkSelfPermission(
+                this,
+                check
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun showRationaleDialog(title: String, message: String) {
+        val builder = AlertDialog.Builder(this)
+        builder
+            .setMessage(message)
+            .setTitle(title)
+            .setPositiveButton("Dismiss") { dialog, _ -> dialog.dismiss() }
+
+        val dialog = builder.create()
+        dialog.show()
     }
 }

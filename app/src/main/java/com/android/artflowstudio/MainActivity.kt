@@ -5,16 +5,17 @@ import android.Manifest.permission.READ_MEDIA_IMAGES
 import android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
 import android.annotation.SuppressLint
 import android.app.Dialog
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.Toast
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
@@ -31,6 +32,13 @@ class MainActivity : AppCompatActivity() {
     private var drawingView: DrawingView? = null
     private var imageButtonCurrentPaint: ImageButton? = null
     private var currentIndex: Int? = null
+
+    private val openGalleryLauncher: ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if(result.resultCode == RESULT_OK && result.data != null) {
+            val imageBackground: ImageView = findViewById(R.id.iv_background)
+            imageBackground.setImageURI(result.data!!.data) // Getting the location of the data
+        }
+    }
 
     @SuppressLint("NewApi")
     @RequiresApi(Build.VERSION_CODES.O)
@@ -65,6 +73,8 @@ class MainActivity : AppCompatActivity() {
         val ibBrush: ImageButton = findViewById(R.id.ib_brush)
         val ibEraser: ImageButton = findViewById(R.id.ib_eraser)
         val ibGallery: ImageButton = findViewById(R.id.ib_add_image)
+        val ibUndo: ImageButton = findViewById(R.id.ib_undo)
+        val ibRedo: ImageButton = findViewById(R.id.ib_redo)
 
         ibBrush.setOnClickListener {
             showBrushSizeChooserDialog()
@@ -91,12 +101,18 @@ class MainActivity : AppCompatActivity() {
 
         ibGallery.setOnClickListener {
             when {
-                checkPermissionsGranted() -> Toast.makeText(this, "Already permissions granted", Toast.LENGTH_SHORT).show()
+                checkPermissionsGranted() -> {
+                    val pickIntent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+                    openGalleryLauncher.launch(pickIntent)
+                }
                 !checkPermissionsGranted() -> showRationaleDialog("Art Flow Studio", "Art Flow Studio needs to Access your External Storage")
                 else -> requestPermission(requestPermissions = requestPermissions)
             }
-
         }
+
+        ibUndo.setOnClickListener { drawingView?.onClickUndo() }
+
+        ibRedo.setOnClickListener { drawingView?.onClickRedo() }
     }
 
     @RequiresApi(Build.VERSION_CODES.O)

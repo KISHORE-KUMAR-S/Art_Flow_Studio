@@ -93,7 +93,7 @@ class MainActivity : AppCompatActivity() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     fun paintClicked(view: View) {
-        if(view != imageButtonCurrentPaint) {
+        if (view != imageButtonCurrentPaint) {
             val imageButton = view as ImageButton
             val colorTag = imageButton.tag.toString()
             drawingView!!.setColor(colorTag)

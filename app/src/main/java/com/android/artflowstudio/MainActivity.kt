@@ -20,6 +20,7 @@ import androidx.core.view.get
 class MainActivity : AppCompatActivity() {
     private var drawingView: DrawingView? = null
     private var imageButtonCurrentPaint: ImageButton? = null
+    private var currentIndex: Int? = null
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,13 +47,19 @@ class MainActivity : AppCompatActivity() {
 
         ibBrush.setOnClickListener {
             showBrushSizeChooserDialog()
-            imageButtonCurrentPaint = linearLayoutPaintColors[1] as ImageButton
+            imageButtonCurrentPaint = when (currentIndex) {
+                null -> linearLayoutPaintColors[1] as ImageButton
+                else -> linearLayoutPaintColors[currentIndex!!] as ImageButton
+            }
+
             drawingView!!.setColor(ibBrush.tag.toString())
             imageButtonCurrentPaint?.setImageDrawable(ContextCompat.getDrawable(this, R.drawable.color_palette_selected))
         }
 
         ibEraser.setOnClickListener {
             showBrushSizeChooserDialog()
+            currentIndex = linearLayoutPaintColors.indexOfChild(imageButtonCurrentPaint)
+
             drawingView!!.setColor(ibEraser.tag.toString())
 
             for (index in 0 until linearLayoutPaintColors.childCount) {

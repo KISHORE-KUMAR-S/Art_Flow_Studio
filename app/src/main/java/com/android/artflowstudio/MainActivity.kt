@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
                 else -> linearLayoutPaintColors[currentIndex!!] as ImageButton
             }
 
-            drawingView!!.setColor(ibBrush.tag.toString())
+            drawingView!!.setColor(imageButtonCurrentPaint!!.tag.toString())
             imageButtonCurrentPaint?.setImageDrawable(ContextCompat.getDrawable(this, R.drawable.color_palette_selected))
         }
 

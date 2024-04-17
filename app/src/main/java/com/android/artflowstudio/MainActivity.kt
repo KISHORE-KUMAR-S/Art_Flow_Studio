@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.Bundle
 import android.os.storage.StorageManager
@@ -53,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     private var frameDrawingView: FrameLayout? = null
     private var layoutPaintColors: LinearLayout? = null
     private var currentIndex: Int? = null
+    private var progressDialog: Dialog? = null
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
         val grantedPermissions = permissions.filterValues { it }
@@ -185,6 +187,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setUpSave() {
         ibSave!!.setOnClickListener {
+            showProgressDialog()
             lifecycleScope.launch {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     saveBitmapFile(
@@ -264,6 +267,29 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    private fun showProgressDialog() {
+        progressDialog = Dialog(this@MainActivity)
+        progressDialog?.setContentView(R.layout.dialog_progress)
+        progressDialog?.show()
+    }
+
+    private fun cancelProgressDialog() {
+        if(progressDialog != null) {
+            progressDialog!!.dismiss()
+            progressDialog = null
+        }
+    }
+
+    private fun shareImage(result: String) =
+        MediaScannerConnection.scanFile(this, arrayOf(result), null) { path, uri ->
+            val shareIntent = Intent()
+
+            shareIntent.action = Intent.ACTION_SEND
+            shareIntent.putExtra(Intent.EXTRA_STREAM, uri)
+            shareIntent.type = "image/jpg"
+            startActivity(Intent.createChooser(shareIntent, "Share"))
+        }
+
     private fun getBitmapFromView(view: View): Bitmap {
         val returnedBitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(returnedBitmap)
@@ -300,8 +326,13 @@ class MainActivity : AppCompatActivity() {
                     result = file.absolutePath
 
                     runOnUiThread {
+                        cancelProgressDialog()
+
                         when {
-                            result.isNotEmpty() -> Toast.makeText(this@MainActivity, "File saved successfully", Toast.LENGTH_SHORT).show()
+                            result.isNotEmpty() -> {
+                                Toast.makeText(this@MainActivity, "File saved successfully", Toast.LENGTH_SHORT).show()
+                                shareImage(result)
+                            }
                             else -> Toast.makeText(this@MainActivity, "Something went wrong while saving the file", Toast.LENGTH_SHORT).show()
                         }
 

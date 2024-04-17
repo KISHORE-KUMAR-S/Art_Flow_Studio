@@ -3,19 +3,25 @@ package com.android.artflowstudio
 import android.Manifest.permission.READ_EXTERNAL_STORAGE
 import android.Manifest.permission.READ_MEDIA_IMAGES
 import android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+import android.Manifest.permission.WRITE_EXTERNAL_STORAGE
 import android.annotation.SuppressLint
 import android.app.Dialog
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.os.storage.StorageManager
 import android.provider.MediaStore
 import android.util.Log
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
@@ -27,6 +33,13 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.get
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : AppCompatActivity() {
     private var drawingView: DrawingView? = null
@@ -75,6 +88,9 @@ class MainActivity : AppCompatActivity() {
         val ibGallery: ImageButton = findViewById(R.id.ib_add_image)
         val ibUndo: ImageButton = findViewById(R.id.ib_undo)
         val ibRedo: ImageButton = findViewById(R.id.ib_redo)
+        val ibSave: ImageButton = findViewById(R.id.ib_save)
+
+        val frameDrawingView: FrameLayout = findViewById(R.id.fl_drawing_view_container)
 
         ibBrush.setOnClickListener {
             showBrushSizeChooserDialog()
@@ -113,6 +129,16 @@ class MainActivity : AppCompatActivity() {
         ibUndo.setOnClickListener { drawingView?.onClickUndo() }
 
         ibRedo.setOnClickListener { drawingView?.onClickRedo() }
+
+        ibSave.setOnClickListener {
+            lifecycleScope.launch {
+                saveBitmapFile(
+                    bitmap = getBitmapFromView(
+                        view = frameDrawingView
+                    )
+                )
+            }
+        }
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -152,15 +178,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun requestPermission(requestPermissions: ActivityResultLauncher<Array<String>>) {
         when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> requestPermissions.launch(arrayOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED))
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> requestPermissions.launch(arrayOf(READ_MEDIA_IMAGES))
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> requestPermissions.launch(arrayOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED, WRITE_EXTERNAL_STORAGE))
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> requestPermissions.launch(arrayOf(READ_MEDIA_IMAGES, WRITE_EXTERNAL_STORAGE))
             else -> requestPermissions.launch(arrayOf(READ_EXTERNAL_STORAGE))
         }
     }
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun checkPermissionsGranted(): Boolean {
-        val permissions = arrayOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED, READ_EXTERNAL_STORAGE)
+        val permissions = arrayOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE)
 
         return permissions.any { check ->
             ContextCompat.checkSelfPermission(
@@ -179,5 +205,58 @@ class MainActivity : AppCompatActivity() {
 
         val dialog = builder.create()
         dialog.show()
+    }
+
+    private fun getBitmapFromView(view: View): Bitmap {
+        val returnedBitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(returnedBitmap)
+        val backgroundDrawable = view.background
+
+        when {
+            backgroundDrawable != null -> backgroundDrawable.draw(canvas)
+            else -> canvas.drawColor(Color.WHITE)
+        }
+
+        view.draw(canvas)
+
+        return returnedBitmap
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private suspend fun saveBitmapFile(bitmap: Bitmap?): String {
+        var result = ""
+
+        withContext(Dispatchers.IO) {
+            if(bitmap != null) {
+                try {
+                    val storageManager = getSystemService(STORAGE_SERVICE) as StorageManager
+                    val storageVolume = storageManager.storageVolumes[0]
+                    val byteArrayOutputStream = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
+                    val bytesArray = byteArrayOutputStream.toByteArray()
+
+                    val file = File(storageVolume.directory?.path + "/Download/Art_Flow_Studio_" + System.currentTimeMillis() + ".jpg")
+                    val fos = FileOutputStream(file)
+                    fos.write(bytesArray)
+                    fos.close()
+
+                    result = file.absolutePath
+
+                    runOnUiThread {
+                        when {
+                            result.isNotEmpty() -> Toast.makeText(this@MainActivity, "File saved successfully", Toast.LENGTH_SHORT).show()
+                            else -> Toast.makeText(this@MainActivity, "Something went wrong while saving the file", Toast.LENGTH_SHORT).show()
+                        }
+
+                        Log.i("Stored: ", result)
+                    }
+                } catch (e: Exception) {
+                    result = ""
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        return result
     }
 }

@@ -44,7 +44,24 @@ import java.io.FileOutputStream
 class MainActivity : AppCompatActivity() {
     private var drawingView: DrawingView? = null
     private var imageButtonCurrentPaint: ImageButton? = null
+    private var ibBrush: ImageButton? = null
+    private var ibEraser: ImageButton? = null
+    private var ibGallery: ImageButton? = null
+    private var ibUndo: ImageButton? = null
+    private var ibRedo: ImageButton? = null
+    private var ibSave: ImageButton? = null
+    private var frameDrawingView: FrameLayout? = null
+    private var layoutPaintColors: LinearLayout? = null
     private var currentIndex: Int? = null
+
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+        val grantedPermissions = permissions.filterValues { it }
+
+        when {
+            grantedPermissions.isEmpty() -> Log.i("Permissions", "Permission Denied.")
+            else -> if (grantedPermissions.keys.intersect(setOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED, READ_EXTERNAL_STORAGE)).isNotEmpty()) Log.i("Permission", "Permission Granted")
+        }
+    }
 
     private val openGalleryLauncher: ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if(result.resultCode == RESULT_OK && result.data != null) {
@@ -57,6 +74,18 @@ class MainActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (
+            !shouldShowRequestPermissionRationale(READ_MEDIA_IMAGES) ||
+            !shouldShowRequestPermissionRationale(READ_MEDIA_VISUAL_USER_SELECTED) ||
+            !shouldShowRequestPermissionRationale(READ_EXTERNAL_STORAGE)) requestPermission(requestPermissionLauncher)
+
+        setupUI()
+        setupDrawingView()
+        setUpPaintButtons()
+    }
+
+    private fun setupUI() {
         enableEdgeToEdge(statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT))
         setContentView(R.layout.activity_main)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
@@ -64,82 +93,110 @@ class MainActivity : AppCompatActivity() {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
+    }
 
-        val requestPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            val grantedPermissions = permissions.filterValues { it }
-
-            when {
-                grantedPermissions.isEmpty() -> Log.i("Permissions", "Permission Denied.")
-                else -> if (grantedPermissions.keys.intersect(setOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED, READ_EXTERNAL_STORAGE)).isNotEmpty()) Log.i("Permission", "Permission Granted")
-            }
-        }
-
+    private fun setupDrawingView() {
         drawingView = findViewById(R.id.drawing_view)
-
-        val linearLayoutPaintColors = findViewById<LinearLayout>(R.id.paint_colors)
-        imageButtonCurrentPaint = linearLayoutPaintColors[1] as ImageButton
+        ibBrush = findViewById(R.id.ib_brush)
+        ibEraser = findViewById(R.id.ib_eraser)
+        ibGallery = findViewById(R.id.ib_add_image)
+        ibUndo = findViewById(R.id.ib_undo)
+        ibRedo = findViewById(R.id.ib_redo)
+        ibSave = findViewById(R.id.ib_save)
+        frameDrawingView = findViewById(R.id.fl_drawing_view_container)
+        layoutPaintColors = findViewById(R.id.paint_colors)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            drawingView?.setSizeForBrush(20.toFloat())
+            drawingView?.setSizeForBrush(20f)
         }
 
-        val ibBrush: ImageButton = findViewById(R.id.ib_brush)
-        val ibEraser: ImageButton = findViewById(R.id.ib_eraser)
-        val ibGallery: ImageButton = findViewById(R.id.ib_add_image)
-        val ibUndo: ImageButton = findViewById(R.id.ib_undo)
-        val ibRedo: ImageButton = findViewById(R.id.ib_redo)
-        val ibSave: ImageButton = findViewById(R.id.ib_save)
+        imageButtonCurrentPaint = layoutPaintColors!![1] as ImageButton
+    }
 
-        val frameDrawingView: FrameLayout = findViewById(R.id.fl_drawing_view_container)
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun setUpPaintButtons() {
+        setUpBrush()
+        setUpEraser()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+            setUpGallery()
+        setUpUndoRedo()
+        setUpSave()
+    }
 
-        ibBrush.setOnClickListener {
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun setUpBrush() {
+        ibBrush!!.setOnClickListener {
             showBrushSizeChooserDialog()
             imageButtonCurrentPaint = when (currentIndex) {
-                null -> linearLayoutPaintColors[1] as ImageButton
-                else -> linearLayoutPaintColors[currentIndex!!] as ImageButton
+                null -> layoutPaintColors!![1] as ImageButton
+                else -> layoutPaintColors!![currentIndex!!] as ImageButton
             }
 
             drawingView!!.setColor(imageButtonCurrentPaint!!.tag.toString())
             imageButtonCurrentPaint?.setImageDrawable(ContextCompat.getDrawable(this, R.drawable.color_palette_selected))
         }
+    }
 
-        ibEraser.setOnClickListener {
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun setUpEraser() {
+        ibEraser!!.setOnClickListener {
             showBrushSizeChooserDialog()
-            currentIndex = linearLayoutPaintColors.indexOfChild(imageButtonCurrentPaint)
+            currentIndex = layoutPaintColors!!.indexOfChild(imageButtonCurrentPaint)
 
-            drawingView!!.setColor(ibEraser.tag.toString())
+            drawingView!!.setColor(ibEraser!!.tag.toString())
 
-            for (index in 0 until linearLayoutPaintColors.childCount) {
-                val button = linearLayoutPaintColors.getChildAt(index) as? ImageButton
+            for (index in 0 until layoutPaintColors!!.childCount) {
+                val button = layoutPaintColors!!.getChildAt(index) as? ImageButton
                 button?.setImageDrawable(ContextCompat.getDrawable(this, R.drawable.color_palette_unselected))
             }
         }
+    }
 
-        ibGallery.setOnClickListener {
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    private fun setUpGallery() {
+        ibGallery!!.setOnClickListener {
             when {
                 checkPermissionsGranted() -> {
                     val pickIntent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
                     openGalleryLauncher.launch(pickIntent)
                 }
-                !checkPermissionsGranted() -> showRationaleDialog("Art Flow Studio", "Art Flow Studio needs to Access your External Storage")
-                else -> requestPermission(requestPermissions = requestPermissions)
-            }
-        }
-
-        ibUndo.setOnClickListener { drawingView?.onClickUndo() }
-
-        ibRedo.setOnClickListener { drawingView?.onClickRedo() }
-
-        ibSave.setOnClickListener {
-            lifecycleScope.launch {
-                saveBitmapFile(
-                    bitmap = getBitmapFromView(
-                        view = frameDrawingView
-                    )
-                )
+                else -> {
+                    if (!shouldShowRequestPermissionRationale(READ_MEDIA_IMAGES) ||
+                        !shouldShowRequestPermissionRationale(READ_MEDIA_VISUAL_USER_SELECTED) ||
+                        !shouldShowRequestPermissionRationale(READ_EXTERNAL_STORAGE)) {
+                        showRationaleDialog(
+                            "Art Flow Studio",
+                            "Art Flow Studio needs to Access your External Storage"
+                        )
+                    } else {
+                        requestPermission(permissions = requestPermissionLauncher)
+                    }
+                }
             }
         }
     }
+
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun setUpUndoRedo() {
+        ibUndo!!.setOnClickListener { drawingView?.onClickUndo() }
+        ibRedo!!.setOnClickListener { drawingView?.onClickRedo() }
+    }
+
+    private fun setUpSave() {
+        ibSave!!.setOnClickListener {
+            lifecycleScope.launch {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    saveBitmapFile(
+                        bitmap = getBitmapFromView(
+                            view = frameDrawingView!!
+                        )
+                    )
+                }
+            }
+        }
+    }
+
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun showBrushSizeChooserDialog() {
@@ -176,11 +233,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestPermission(requestPermissions: ActivityResultLauncher<Array<String>>) {
+    private fun requestPermission(permissions: ActivityResultLauncher<Array<String>>) {
         when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> requestPermissions.launch(arrayOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED, WRITE_EXTERNAL_STORAGE))
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> requestPermissions.launch(arrayOf(READ_MEDIA_IMAGES, WRITE_EXTERNAL_STORAGE))
-            else -> requestPermissions.launch(arrayOf(READ_EXTERNAL_STORAGE))
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> permissions.launch(arrayOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED, WRITE_EXTERNAL_STORAGE))
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> permissions.launch(arrayOf(READ_MEDIA_IMAGES, WRITE_EXTERNAL_STORAGE))
+            else -> permissions.launch(arrayOf(READ_EXTERNAL_STORAGE))
         }
     }
 

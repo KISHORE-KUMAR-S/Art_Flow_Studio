@@ -77,10 +77,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (
-            !shouldShowRequestPermissionRationale(READ_MEDIA_IMAGES) ||
+        if (!shouldShowRequestPermissionRationale(READ_MEDIA_IMAGES) ||
             !shouldShowRequestPermissionRationale(READ_MEDIA_VISUAL_USER_SELECTED) ||
-            !shouldShowRequestPermissionRationale(READ_EXTERNAL_STORAGE)) requestPermission(requestPermissionLauncher)
+            !shouldShowRequestPermissionRationale(READ_EXTERNAL_STORAGE)
+            ) requestPermission(requestPermissionLauncher)
 
         setupUI()
         setupDrawingView()
@@ -281,7 +281,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun shareImage(result: String) =
-        MediaScannerConnection.scanFile(this, arrayOf(result), null) { path, uri ->
+        MediaScannerConnection.scanFile(this, arrayOf(result), null) { _, uri ->
             val shareIntent = Intent()
 
             shareIntent.action = Intent.ACTION_SEND
